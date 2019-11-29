@@ -1,0 +1,99 @@
+metadata:
+  name: architecting-java-ee
+projects:
+  - name: architecting-java-ee
+    source:
+      location: 'https://github.com/tobantal/architecting-java-ee.git'
+      type: git
+      branch: master
+attributes:
+  persistVolumes: 'false'
+components:
+  - id: redhat/java/latest
+    memoryLimit: 1512Mi
+    type: chePlugin
+  - mountSources: true
+    endpoints:
+      - name: 8080/tcp
+        port: 8080
+    memoryLimit: 768Mi
+    type: dockerimage
+    volumes:
+      - name: m2
+        containerPath: /home/user/.m2
+    alias: tools
+    image: 'quay.io/eclipse/che-java8-maven:nightly'
+    env:
+      - value: >-
+          -XX:MaxRAMPercentage=50.0 -XX:+UseParallelGC -XX:MinHeapFreeRatio=10
+          -XX:MaxHeapFreeRatio=20 -XX:GCTimeRatio=4
+          -XX:AdaptiveSizePolicyWeight=90 -Dsun.zip.disableMemoryMapping=true
+          -Xms20m -Djava.security.egd=file:/dev/./urandom -Duser.home=/home/user
+        name: JAVA_OPTS
+      - value: $(JAVA_OPTS)
+        name: MAVEN_OPTS
+apiVersion: 1.0.0
+commands:
+  - name: maven build
+    actions:
+      - workdir: '${CHE_PROJECTS_ROOT}/architecting-java-ee'
+        type: exec
+        command: mvn clean install
+        component: tools
+  - name: sh
+    actions:
+      - workdir: '${CHE_PROJECTS_ROOT}/architecting-java-ee'
+        type: exec
+        command: sh
+        component: tools
+  - name: stop webapp
+    actions:
+      - type: exec
+        command: >-
+          echo 'Stopping the application...' && kill $(pidof java) && echo 'The
+          application has been successfully stopped'
+        component: tools
+  - name: git log
+    actions:
+      - workdir: '${CHE_PROJECTS_ROOT}/architecting-java-ee'
+        type: exec
+        command: git log
+        component: tools
+  - name: run webapp (debug mode)
+    actions:
+      - workdir: '${CHE_PROJECTS_ROOT}/architecting-java-ee'
+        type: exec
+        command: >
+          java -jar -Xdebug
+          -Xrunjdwp:transport=dt_socket,server=y,suspend=n,address=5005 \
+          ${CHE_PROJECTS_ROOT}/architecting-java-ee/target/tobolkin-0.0.1-SNAPSHOT.jar
+        component: tools
+  - name: Debug remote java application
+    actions:
+      - referenceContent: |-
+          {
+          "version": "0.2.0",
+          "configurations": [
+            {
+              "type": "java",
+              "name": "Debug (Attach) - Remote",
+              "request": "attach",
+              "hostName": "localhost",
+              "port": 5005
+            }]
+          }
+        type: vscode-launch
+  - name: run webapp
+    actions:
+      - workdir: '${CHE_PROJECTS_ROOT}/architecting-java-ee'
+        type: exec
+        command: 'mvn spring-boot:run'
+        component: tools
+  - name: git add-commit-push
+    actions:
+      - workdir: '${CHE_PROJECTS_ROOT}/architecting-java-ee'
+        type: exec
+        command: >-
+          git add . && git commit -m 'commit from OpenShift Eclipse Che' && git
+          push 'https://github.com/tobantal/architecting-java-ee.git'
+        component: tools
